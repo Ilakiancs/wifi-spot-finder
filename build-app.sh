@@ -1,5 +1,6 @@
 #!/bin/zsh
 # Builds "Wi-Fi Spot Finder.app" and installs it into /Applications (or ~/Applications).
+# Pass --no-install to only build it into ./build.
 set -e
 cd "$(dirname "$0")"
 NAME="Wi-Fi Spot Finder"
@@ -40,6 +41,11 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </dict></plist>
 EOF
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1
+
+if [ "$1" = "--no-install" ]; then
+  echo "Built: $APP"
+  exit 0
+fi
 
 DEST=/Applications
 [ -w "$DEST" ] || { DEST="$HOME/Applications"; mkdir -p "$DEST"; }
