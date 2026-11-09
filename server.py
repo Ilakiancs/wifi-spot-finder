@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from tools import channels
+from tools.devices import DeviceTracker
 from tools.speedcheck import SpeedChecker
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -63,6 +64,7 @@ def wifi_now():
 
 
 speed = SpeedChecker(DATA_DIR, wifi_now, heavy_lock)
+devices = DeviceTracker(DATA_DIR, lambda: gateway)
 lag = {"running": False, "phase": "", "started": None, "result": None, "error": None}
 
 
@@ -524,7 +526,7 @@ class Handler(BaseHTTPRequestHandler):
             except (BrokenPipeError, ConnectionResetError):
                 return
         if path == "/api/now":
-            return self._json({**snapshot(), "today": today_summary()})
+            return self._json({**snapshot(), "today": today_summary(), "alerts": devices.alerts[-5:]})
         if path == "/api/spots":
             return self._json(read_json(SPOTS_FILE, []))
         if path == "/api/settings":
@@ -546,6 +548,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(read_json(SCAN_FILE, None))
         if path == "/api/speed":
             return self._json(speed.state(hours))
+        if path == "/api/devices":
+            return self._json(devices.state())
         if path == "/api/export/speed.csv":
             rows = [[fmt_ts(r["t"]), r["down"], r["up"], r.get("latency"), r.get("rssi"), r.get("tx"),
                      "yes" if r.get("wifiLimited") else "", r.get("reason")] for r in speed.results(hours)]
@@ -597,6 +601,20 @@ class Handler(BaseHTTPRequestHandler):
                 lag.update(running=True, phase="idle", started=time.time(), result=None, error=None)
                 threading.Thread(target=run_lagtest, daemon=True).start()
                 return self._json({"ok": True})
+            if path == "/api/devices/scan":
+                devices.scan()
+                return self._json(devices.state())
+            if path in ("/api/devices/update", "/api/devices/forget", "/api/devices/settings"):
+                data = json.loads(self._body(64 * 1024))
+                if not isinstance(data, dict):
+                    raise ValueError("wrong shape")
+                if path.endswith("update"):
+                    devices.update(str(data.get("mac", "")), label=data.get("label"), known=data.get("known"))
+                elif path.endswith("forget"):
+                    devices.forget(str(data.get("mac", "")))
+                else:
+                    devices.save_settings(data)
+                return self._json(devices.state())
             if path == "/api/speed/run":
                 started = speed.start()
                 return self._json({"ok": started, "busy": not started})
@@ -637,6 +655,7 @@ def main():
     threading.Thread(target=ping_loop, args=("internet", lambda: INTERNET_HOST), daemon=True).start()
     threading.Thread(target=monitor_loop, daemon=True).start()
     threading.Thread(target=speed.scheduler_loop, daemon=True).start()
+    threading.Thread(target=devices.auto_loop, daemon=True).start()
     print(f"Wi-Fi Spot Finder running at {url}  (Ctrl+C to stop)")
     if open_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()

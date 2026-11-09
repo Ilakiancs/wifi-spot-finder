@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devices</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .head h2 { margin: 0; }
+  .on-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--track); }
+  .on-dot.live { background: var(--excellent); }
+  .name { cursor: text; border-bottom: 1px dashed transparent; }
+  .name:hover { border-bottom-color: var(--muted); }
+  .rename { width: 180px; padding: 4px 8px; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .mac { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+  .tag { font-size: 11px; font-weight: 650; border-radius: 6px; padding: 1px 6px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .tag.new { background: var(--weak); color: #fff; border-color: transparent; }
+  .tag.you { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  tr.offline td { opacity: .55; }
+  .act { padding: 3px 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header id="nav"></header>
+
+  <div class="grid">
+    <section class="card full">
+      <div class="head">
+        <h2>Devices on your network</h2>
+        <div class="row">
+          <label class="row small muted" style="gap:6px"><input type="checkbox" id="auto"> Check every 10 min</label>
+          <button class="primary" id="scan">Scan now</button>
+        </div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <p class="muted small" id="status" style="margin-top:10px"></p>
+    </section>
+
+    <section class="card full">
+      <div class="tablewrap">
+        <table id="list"><thead><tr><th>Device</th><th>IP</th><th class="hide-sm">Maker</th><th class="hide-sm">Hardware address</th><th>Last seen</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="empty" id="empty" hidden>No devices yet. Press Scan now.</div>
+    </section>
+
+    <section class="card full">
+      <h2>Good to know</h2>
+      <ul class="tips">
+        <li>Click a device's name to rename it, e.g. "Mum's phone" or "Living room TV".</li>
+        <li>Most phones, and newer laptops, use a <b>private address</b> that hides who made them, and some change it now and then. A device you already know can show up as new after one of those changes.</li>
+        <li>Sleeping devices don't always answer, so a phone in someone's pocket may show as offline even though it's still connected.</li>
+        <li>With the Mac app running, you get a notification when a device joins that hasn't been seen before.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script src="devices.js"></script>
+</body>
+</html>

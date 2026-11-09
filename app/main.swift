@@ -5,6 +5,7 @@
 import AppKit
 import CoreLocation
 import UniformTypeIdentifiers
+import UserNotifications
 import WebKit
 
 let port = 8765
@@ -14,7 +15,7 @@ let launchAgentLabel = "local.wifispotfinder"
 let pages: [(String, String, String)] = [
     ("Live", "index.html", "1"), ("Heatmap", "heatmap.html", "2"), ("Channels", "channels.html", "3"),
     ("Lag Test", "lag.html", "4"), ("Speed Checks", "speed.html", "5"),
-    ("History & Dropouts", "history.html", "6"),
+    ("Devices", "devices.html", "6"), ("History & Dropouts", "history.html", "7"),
 ]
 var launchAgentURL: URL {
     FileManager.default.homeDirectoryForCurrentUser
@@ -23,7 +24,7 @@ var launchAgentURL: URL {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate,
                          WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler,
-                         CLLocationManagerDelegate {
+                         CLLocationManagerDelegate, UNUserNotificationCenterDelegate {
     var window: NSWindow?
     var web: WKWebView?
     var server: Process?
@@ -33,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var downloads: [ObjectIdentifier: URL] = [:]
     var serverReady = false
     let location = CLLocationManager()
+    var lastAlertId: Int?
 
     // MARK: lifecycle
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -281,6 +283,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             infoItems[3].title = drops == 0 ? "Today: no dropouts"
                 : "Today: \(drops) dropout\(drops == 1 ? "" : "s") · \(down / 60)m \(down % 60)s down"
         }
+        notifyNewDevices(d["alerts"] as? [[String: Any]] ?? [])
+    }
+
+    // MARK: notifications for devices that join the network for the first time
+    func notifyNewDevices(_ alerts: [[String: Any]]) {
+        let ids = alerts.compactMap { $0["id"] as? Int }
+        guard let last = lastAlertId else { lastAlertId = ids.max() ?? 0; return }  // don't replay old ones
+        let fresh = alerts.filter { ($0["id"] as? Int ?? 0) > last }
+        guard !fresh.isEmpty else { return }
+        lastAlertId = ids.max()
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            for a in fresh {
+                let c = UNMutableNotificationContent()
+                c.title = "New device on your Wi-Fi"
+                let name = (a["name"] as? String).map { "\($0) " } ?? "An unfamiliar device "
+                c.body = "\(name)(\(a["ip"] as? String ?? "?")) joined your network for the first time."
+                c.sound = .default
+                center.add(UNNotificationRequest(identifier: "device-\(a["id"] ?? 0)", content: c, trigger: nil))
+            }
+        }
+    }
+
+    func userNotificationCenter(_ c: UNUserNotificationCenter, willPresent n: UNNotification,
+                                withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        done([.banner, .sound])
+    }
+
+    func userNotificationCenter(_ c: UNUserNotificationCenter, didReceive r: UNNotificationResponse,
+                                withCompletionHandler done: @escaping () -> Void) {
+        showPage("devices.html")
+        done()
     }
 
     // MARK: launch at login (LaunchAgent, starts quietly in the menu bar)
