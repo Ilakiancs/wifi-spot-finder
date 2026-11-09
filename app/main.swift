@@ -246,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let drops = t["dropouts"] as? Int ?? 0
             let down = t["downtime"] as? Int ?? 0
             infoItems[2].title = "Today: avg \(avg) · weak \((t["weakPct"] as? Int).map { "\($0)%" } ?? "--") of the time"
-            infoItems[3].title = drops == 0 ? "Today: no dropouts ✓"
+            infoItems[3].title = drops == 0 ? "Today: no dropouts"
                 : "Today: \(drops) dropout\(drops == 1 ? "" : "s") · \(down / 60)m \(down % 60)s down"
         }
     }

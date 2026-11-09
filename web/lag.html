@@ -33,7 +33,7 @@
         <div class="verdict">
           <h3 id="vTitle">How laggy does your connection get when it's busy?</h3>
           <p class="muted" id="vText">This test fills your connection with downloads, then uploads, using Apple's built-in <code>networkQuality</code>, while it pings 1.1.1.1. It measures how much delay builds up. That delay is what makes video calls freeze and games spike. It takes about 50 seconds and uses roughly 150–300 MB of data.</p>
-          <div class="row"><button class="primary" id="start">▶ Start test</button><span class="muted small" id="status"></span></div>
+          <div class="row"><button class="primary" id="start">Start test</button><span class="muted small" id="status"></span></div>
           <div class="progress" id="prog" style="visibility:hidden"><div></div></div>
         </div>
       </div>
@@ -126,7 +126,7 @@ function showResult(r) {
   g.className = 'grade'; g.textContent = r.grade || '?'; g.style.background = css(GRADE_COLOR(r.grade));
   const [title, text] = VERDICT[r.grade] || ['Result', ''];
   $('vTitle').textContent = title; $('vText').textContent = text;
-  $('start').textContent = '↻ Run again';
+  $('start').textContent = 'Run again';
 
   const tile = (k, v, h, color) => `<div class="tile"><div class="k">${k}</div><div class="v" ${color ? `style="color:${css(color)}"` : ''}>${v}</div><div class="h">${h}</div></div>`;
   $('resultCard').hidden = false;

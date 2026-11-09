@@ -32,9 +32,9 @@
     <section class="card">
       <h2>Floor plan</h2>
       <div class="row toolbar">
-        <button id="upload">🖼 Upload floor plan</button>
-        <button id="blank">▦ Use blank grid</button>
-        <button id="routerBtn">📡 Mark router</button>
+        <button id="upload">Upload floor plan</button>
+        <button id="blank">Use blank grid</button>
+        <button id="routerBtn">Mark router</button>
         <label class="row small muted" style="gap:6px;margin-left:auto"><input type="checkbox" id="showHeat" checked> Show heat</label>
         <input type="file" id="drop" accept="image/*">
       </div>
@@ -269,13 +269,13 @@ function renderInsights(placed) {
   const sorted = [...placed].sort((a, b) => b.score - a.score), bestSpot = sorted[0];
   const weak = placed.filter(s => s.rssi < -72).sort((a, b) => a.rssi - b.rssi);
   const goodPct = est ? Math.round(100 * [...est.vals].filter((v, k) => est.conf[k] > .35 && v >= -67).length / Math.max(1, [...est.conf].filter(c => c > .35).length)) : null;
-  let html = `<div class="insight"><div class="t">🏆 Best spot: ${esc(bestSpot.name)}</div><div class="d">${fmt(bestSpot.rssi, 1)} dBm · score ${bestSpot.score}. Sit here for calls and big downloads.</div></div>`;
-  if (goodPct != null) html += `<div class="insight"><div class="t">📶 ${goodPct}% of the mapped area has good signal</div><div class="d">Good means −67 dBm or better, among the areas you've measured.</div></div>`;
+  let html = `<div class="insight"><div class="t">Best spot: ${esc(bestSpot.name)}</div><div class="d">${fmt(bestSpot.rssi, 1)} dBm · score ${bestSpot.score}. Sit here for calls and big downloads.</div></div>`;
+  if (goodPct != null) html += `<div class="insight"><div class="t">${goodPct}% of the mapped area has good signal</div><div class="d">Good means −67 dBm or better, among the areas you've measured.</div></div>`;
   html += weak.length
-    ? `<div class="insight"><div class="t" style="color:var(--weak)">⚠ Dead zones: ${weak.map(s => esc(s.name)).join(', ')}</div><div class="d">Below −72 dBm. Expect slow speeds and lag here.</div></div>`
-    : `<div class="insight"><div class="t" style="color:var(--excellent)">✓ No dead zones where you measured</div><div class="d">Every spot is −72 dBm or better.</div></div>`;
-  if (suggestion?.kind === 'good') html += `<div class="insight"><div class="t" style="color:#7c3aed">★ Put a mesh node or extender at the star</div><div class="d">It still gets about ${fmt(suggestion.est, 0)} dBm from the router there, enough for a solid backhaul, and it's the closest such point to your dead zones.</div></div>`;
-  else if (suggestion?.kind === 'midpoint') html += `<div class="insight"><div class="t" style="color:#7c3aed">★ Try a node halfway (star)</div><div class="d">No measured area has good signal yet. Start halfway between the router and the dead zone, re-measure there, or use a mesh node with an Ethernet backhaul.</div></div>`;
+    ? `<div class="insight"><div class="t" style="color:var(--weak)">Dead zones: ${weak.map(s => esc(s.name)).join(', ')}</div><div class="d">Below −72 dBm. Expect slow speeds and lag here.</div></div>`
+    : `<div class="insight"><div class="t" style="color:var(--excellent)">No dead zones where you measured</div><div class="d">Every spot is −72 dBm or better.</div></div>`;
+  if (suggestion?.kind === 'good') html += `<div class="insight"><div class="t" style="color:#7c3aed">Put a mesh node or extender at the star</div><div class="d">It still gets about ${fmt(suggestion.est, 0)} dBm from the router there, enough for a solid backhaul, and it's the closest such point to your dead zones.</div></div>`;
+  else if (suggestion?.kind === 'midpoint') html += `<div class="insight"><div class="t" style="color:#7c3aed">Try a node halfway (the star)</div><div class="d">No measured area has good signal yet. Start halfway between the router and the dead zone, re-measure there, or use a mesh node with an Ethernet backhaul.</div></div>`;
   else if (suggestion?.kind === 'none') html += `<div class="insight"><div class="t">Mark your router</div><div class="d">Signal is weak everywhere you measured. Mark the router so I can suggest a node position.</div></div>`;
   box.innerHTML = html;
 }

@@ -480,7 +480,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         path, qs = url.path, parse_qs(url.query)
-        hours = float(qs.get("hours", ["24"])[0])
+        try:
+            hours = min(max(float(qs.get("hours", ["24"])[0]), 1), 24 * 30)
+        except ValueError:
+            hours = 24
         since = time.time() - hours * 3600
 
         if path == "/":
