@@ -17,7 +17,8 @@ echo "Drawing icon…"
 iconutil -c icns "$BUILD/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
 cp "$BUILD/AppIcon.iconset/icon_256x256.png" assets/logo.png
 
-cp server.py index.html "$APP/Contents/Resources/"
+cp server.py "$APP/Contents/Resources/"
+cp -R web "$APP/Contents/Resources/web"
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

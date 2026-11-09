@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wi‑Fi Heatmap</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #map { cursor: crosshair; border-radius: 12px; background: var(--bg); touch-action: manipulation; }
+  .toolbar { margin-bottom: 12px; }
+  .hint { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 20px; }
+  .hint b { color: var(--ink); }
+  .legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .legend .ramp { flex: 1; height: 8px; border-radius: 4px; max-width: 260px;
+    background: linear-gradient(90deg, #d93636, #e8681a 35%, #f2b62f 55%, #8bd352 75%, #12a150); }
+  .now { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .now b { font-size: 34px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .rec input { flex: 1 1 140px; }
+  .insight { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .insight:last-child { border-bottom: 0; }
+  .insight .t { font-weight: 650; }
+  .insight .d { color: var(--muted); font-size: 13px; }
+  #drop { display: none; }
+  .placing { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header id="nav"></header>
+
+  <div class="grid side">
+    <section class="card">
+      <h2>Floor plan</h2>
+      <div class="row toolbar">
+        <button id="upload">🖼 Upload floor plan</button>
+        <button id="blank">▦ Use blank grid</button>
+        <button id="routerBtn">📡 Mark router</button>
+        <label class="row small muted" style="gap:6px;margin-left:auto"><input type="checkbox" id="showHeat" checked> Show heat</label>
+        <input type="file" id="drop" accept="image/*">
+      </div>
+      <canvas id="map"></canvas>
+      <div class="legend"><span>Weak</span><div class="ramp"></div><span>Strong</span><span style="margin-left:auto" id="count"></span></div>
+      <div class="hint" id="hint"></div>
+    </section>
+
+    <div style="display:grid;gap:16px;align-content:start">
+      <section class="card">
+        <h2>Record a spot</h2>
+        <div class="now"><b id="nowRssi">--</b><span class="muted">dBm</span><span id="nowQ" style="font-weight:600"></span></div>
+        <div class="row rec">
+          <input id="spotName" placeholder="Spot name (optional)" maxlength="40">
+          <button class="primary" id="recBtn" disabled>Record 10 s</button>
+        </div>
+        <div class="progress" id="prog" style="visibility:hidden"><div></div></div>
+        <div class="muted small" id="recStatus">Click the map where you're standing, then record.</div>
+      </section>
+
+      <section class="card">
+        <h2>Insights</h2>
+        <div id="insights"><div class="muted small">Record at least 3 spots around your home to see dead zones and where a mesh node would help most.</div></div>
+      </section>
+    </div>
+
+    <section class="card full">
+      <h2>Spots</h2>
+      <div class="tablewrap">
+        <table id="spots" hidden>
+          <thead><tr><th>Spot</th><th>Signal</th><th>Score</th><th class="hide-sm">Ping</th><th>On map</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="empty" id="noSpots">No spots yet.</div>
+    </section>
+
+    <section class="card full">
+      <h2>Tips</h2>
+      <ul class="tips">
+        <li>A photo of a hand-drawn sketch works fine. So does a screenshot of a listing's floor plan, or the blank grid.</li>
+        <li>Record in every room, plus a few spots along the way between the router and the weakest room. More spots give a better map.</li>
+        <li>The colours fade where you haven't measured. The map only guesses near real readings.</li>
+        <li>A mesh node needs a good link back to the router. That's why the suggestion sits where signal is still good (about −67 dBm or better) but as close to your dead zone as possible.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+mountNav('heatmap.html');
+let settings = {}, spots = [], img = null, pending = null, mode = 'spot', recording = false;
+let est = null; // { cols, rows, cell, vals: Float32Array (NaN = unknown), conf }
+let suggestion = null;
+
+const STOPS = [[0, [217, 54, 54]], [0.35, [232, 104, 26]], [0.55, [242, 182, 47]], [0.75, [139, 211, 82]], [1, [18, 161, 80]]];
+function heatColor(v) {
+  const t = clamp((v + 85) / 30, 0, 1);
+  for (let k = 1; k < STOPS.length; k++) {
+    if (t <= STOPS[k][0]) {
+      const [t0, c0] = STOPS[k - 1], [t1, c1] = STOPS[k], f = (t - t0) / (t1 - t0);
+      return c0.map((c, i) => Math.round(c + (c1[i] - c) * f));
+    }
+  }
+  return STOPS.at(-1)[1];
+}
+
+// ---------- data ----------
+async function init() {
+  [settings, spots] = await Promise.all([api('/api/settings').catch(() => ({})), loadSpots()]);
+  if (settings.plan === 'image') await loadPlanImage();
+  render(); renderSpots();
+}
+async function loadPlanImage() {
+  try {
+    const blob = await (await fetch('/api/floorplan', { cache: 'no-store' })).blob();
+    if (!blob.type.startsWith('image/')) throw 0;
+    img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(blob); });
+  } catch { img = null; settings.plan = null; }
+}
+const saveSettings = () => api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) }).catch(() => {});
+
+$('upload').onclick = () => $('drop').click();
+$('drop').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  await fetch('/api/floorplan', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+  settings.plan = 'image'; saveSettings(); await loadPlanImage(); render();
+  e.target.value = '';
+};
+$('blank').onclick = async () => {
+  settings.plan = 'grid'; img = null; saveSettings();
+  fetch('/api/floorplan', { method: 'DELETE' }); render();
+};
+$('routerBtn').onclick = () => { mode = mode === 'router' ? 'spot' : 'router'; render(); };
+$('showHeat').onchange = render;
+window.addEventListener('resize', render);
+
+// ---------- map interaction ----------
+$('map').addEventListener('click', e => {
+  if (!settings.plan) return;
+  const r = $('map').getBoundingClientRect();
+  const p = { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) };
+  if (mode === 'router') { settings.router = p; saveSettings(); mode = 'spot'; }
+  else if (typeof mode === 'object') { Object.assign(spots[mode.place], p); saveSpots(spots); mode = 'spot'; renderSpots(); }
+  else if (!recording) { pending = p; $('recBtn').disabled = false; $('recStatus').textContent = 'Position set. Hold still and press Record.'; }
+  render();
+});
+
+// ---------- rendering ----------
+function render() {
+  const c = $('map'), aspect = img ? img.naturalWidth / img.naturalHeight : 4 / 3;
+  c.style.height = `${Math.round(c.clientWidth / clamp(aspect, 0.5, 2.5))}px`;
+  const { ctx, w, h } = setupCanvas(c);
+  c.classList.toggle('placing', mode !== 'spot');
+  const placed = spots.filter(s => s.x != null);
+  $('count').textContent = settings.plan ? `${placed.length} spot${placed.length === 1 ? '' : 's'} on map` : '';
+
+  if (!settings.plan) {
+    ctx.fillStyle = css('--muted'); ctx.textAlign = 'center'; ctx.font = '15px -apple-system, sans-serif';
+    ctx.fillText('Upload a floor plan (photo or sketch) or use the blank grid to start', w / 2, h / 2);
+    ctx.textAlign = 'start';
+    $('hint').innerHTML = '';
+    return;
+  }
+  if (img) { ctx.globalAlpha = 0.9; ctx.drawImage(img, 0, 0, w, h); ctx.globalAlpha = 1; }
+  else {
+    ctx.strokeStyle = css('--line'); ctx.lineWidth = 1;
+    for (let x = 0; x <= w; x += 32) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, h); ctx.stroke(); }
+    for (let y = 0; y <= h; y += 32) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(w, y + .5); ctx.stroke(); }
+  }
+
+  computeEstimate(placed, w, h);
+  if ($('showHeat').checked && est) drawHeat(ctx, w, h);
+  computeSuggestion(placed, w, h);
+
+  // markers
+  if (settings.router) marker(ctx, settings.router.x * w, settings.router.y * h, css('--accent'), 'R', 'Router');
+  if (suggestion?.x != null) {
+    const sx = suggestion.x * w, sy = suggestion.y * h;
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(sx, sy, 20, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+    marker(ctx, sx, sy, '#7c3aed', '★', 'Mesh node here');
+  }
+  placed.forEach(s => marker(ctx, s.x * w, s.y * h, quality(s.rssi).color, '', `${s.name} · ${fmt(s.rssi, 0)}`));
+  if (pending) {
+    const px = pending.x * w, py = pending.y * h;
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px - 22, py); ctx.lineTo(px - 8, py); ctx.moveTo(px + 8, py); ctx.lineTo(px + 22, py);
+    ctx.moveTo(px, py - 22); ctx.lineTo(px, py - 8); ctx.moveTo(px, py + 8); ctx.lineTo(px, py + 22); ctx.stroke();
+  }
+
+  $('hint').innerHTML = mode === 'router' ? '<b>Click where your router is.</b>'
+    : typeof mode === 'object' ? `<b>Click where “${esc(spots[mode.place].name)}” was recorded.</b>`
+    : settings.router ? 'Click where you are standing, then record.' : 'Tip: mark your router so the map has a reference point.';
+  renderInsights(placed);
+}
+
+function marker(ctx, x, y, color, glyph, label) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 6;
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
+  if (glyph) { ctx.fillStyle = '#fff'; ctx.font = 'bold 12px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(glyph, x, y + 0.5); }
+  ctx.font = '600 12px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const tw = ctx.measureText(label).width;
+  ctx.fillStyle = 'rgba(15,17,21,.78)';
+  ctx.beginPath(); ctx.roundRect(x - tw / 2 - 6, y + 15, tw + 12, 19, 6); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.fillText(label, x, y + 18);
+  ctx.restore();
+}
+
+// inverse-distance-weighted estimate, with confidence fading away from real readings
+function computeEstimate(placed, w, h) {
+  if (!placed.length) { est = null; return; }
+  const cell = 8, cols = Math.ceil(w / cell), rows = Math.ceil(h / cell), D = Math.hypot(w, h);
+  const R0 = 0.10 * D, R1 = 0.30 * D;
+  const vals = new Float32Array(cols * rows), conf = new Float32Array(cols * rows);
+  const pts = placed.map(s => [s.x * w, s.y * h, s.rssi]);
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const px = (i + .5) * cell, py = (j + .5) * cell;
+    let num = 0, den = 0, dmin = Infinity;
+    for (const [x, y, v] of pts) {
+      const d = Math.hypot(px - x, py - y); dmin = Math.min(dmin, d);
+      const wt = 1 / Math.max(d, 4) ** 2; num += wt * v; den += wt;
+    }
+    vals[j * cols + i] = num / den;
+    conf[j * cols + i] = clamp(1 - (dmin - R0) / (R1 - R0), 0, 1);
+  }
+  est = { cell, cols, rows, vals, conf };
+}
+function drawHeat(ctx, w, h) {
+  const off = document.createElement('canvas'); off.width = est.cols; off.height = est.rows;
+  const o = off.getContext('2d'), id = o.createImageData(est.cols, est.rows);
+  for (let k = 0; k < est.vals.length; k++) {
+    const [r, g, b] = heatColor(est.vals[k]);
+    id.data.set([r, g, b, Math.round(150 * est.conf[k])], k * 4);
+  }
+  o.putImageData(id, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(off, 0, 0, est.cols * est.cell, est.rows * est.cell);
+}
+
+// best place for a mesh node: still-good signal (≥ −67), as close as possible to the dead zones
+function computeSuggestion(placed, w, h) {
+  suggestion = null;
+  const weak = placed.filter(s => s.rssi < -72);
+  if (placed.length < 3 || !weak.length || !est) return;
+  let tw = 0, tx = 0, ty = 0;
+  weak.forEach(s => { const wt = -72 - s.rssi + 1; tw += wt; tx += wt * s.x * w; ty += wt * s.y * h; });
+  tx /= tw; ty /= tw;
+  let best = null, bestD = Infinity;
+  for (let j = 0; j < est.rows; j++) for (let i = 0; i < est.cols; i++) {
+    const k = j * est.cols + i;
+    if (est.conf[k] < 0.35 || est.vals[k] < -67) continue;
+    const px = (i + .5) * est.cell, py = (j + .5) * est.cell, d = Math.hypot(px - tx, py - ty);
+    if (d < bestD) { bestD = d; best = { x: px / w, y: py / h, est: est.vals[k] }; }
+  }
+  if (best) suggestion = { ...best, kind: 'good' };
+  else if (settings.router) suggestion = { x: (settings.router.x + tx / w) / 2, y: (settings.router.y + ty / h) / 2, kind: 'midpoint' };
+  else suggestion = { kind: 'none' };
+}
+
+function renderInsights(placed) {
+  const box = $('insights');
+  if (placed.length < 3) {
+    box.innerHTML = `<div class="muted small">Record at least 3 spots on the map to see dead zones and mesh-node advice (${placed.length}/3 so far).</div>`;
+    return;
+  }
+  const sorted = [...placed].sort((a, b) => b.score - a.score), bestSpot = sorted[0];
+  const weak = placed.filter(s => s.rssi < -72).sort((a, b) => a.rssi - b.rssi);
+  const goodPct = est ? Math.round(100 * [...est.vals].filter((v, k) => est.conf[k] > .35 && v >= -67).length / Math.max(1, [...est.conf].filter(c => c > .35).length)) : null;
+  let html = `<div class="insight"><div class="t">🏆 Best spot: ${esc(bestSpot.name)}</div><div class="d">${fmt(bestSpot.rssi, 1)} dBm · score ${bestSpot.score}. Sit here for calls and big downloads.</div></div>`;
+  if (goodPct != null) html += `<div class="insight"><div class="t">📶 ${goodPct}% of the mapped area has good signal</div><div class="d">Good means −67 dBm or better, among the areas you've measured.</div></div>`;
+  html += weak.length
+    ? `<div class="insight"><div class="t" style="color:var(--weak)">⚠ Dead zones: ${weak.map(s => esc(s.name)).join(', ')}</div><div class="d">Below −72 dBm. Expect slow speeds and lag here.</div></div>`
+    : `<div class="insight"><div class="t" style="color:var(--excellent)">✓ No dead zones where you measured</div><div class="d">Every spot is −72 dBm or better.</div></div>`;
+  if (suggestion?.kind === 'good') html += `<div class="insight"><div class="t" style="color:#7c3aed">★ Put a mesh node or extender at the star</div><div class="d">It still gets about ${fmt(suggestion.est, 0)} dBm from the router there, enough for a solid backhaul, and it's the closest such point to your dead zones.</div></div>`;
+  else if (suggestion?.kind === 'midpoint') html += `<div class="insight"><div class="t" style="color:#7c3aed">★ Try a node halfway (star)</div><div class="d">No measured area has good signal yet. Start halfway between the router and the dead zone, re-measure there, or use a mesh node with an Ethernet backhaul.</div></div>`;
+  else if (suggestion?.kind === 'none') html += `<div class="insight"><div class="t">Mark your router</div><div class="d">Signal is weak everywhere you measured. Mark the router so I can suggest a node position.</div></div>`;
+  box.innerHTML = html;
+}
+
+// ---------- recording ----------
+startLive((d, connected) => {
+  const q = quality(connected ? d.rssi : null);
+  $('nowRssi').textContent = connected ? fmt(d.rssi) : '--';
+  $('nowRssi').style.color = q.color; $('nowQ').textContent = q.name; $('nowQ').style.color = q.color;
+});
+$('recBtn').onclick = () => {
+  if (!pending || recording) return;
+  const placedCount = spots.length;
+  const name = $('spotName').value.trim() || `Spot ${placedCount + 1}`;
+  recording = true; $('recBtn').disabled = $('spotName').disabled = true;
+  $('prog').style.visibility = 'visible'; $('recStatus').textContent = `Recording “${name}”… hold still.`;
+  recordSpot({
+    name, x: pending.x, y: pending.y,
+    onProgress: p => $('prog').firstElementChild.style.width = `${p * 100}%`,
+    onDone: async spot => {
+      recording = false; $('spotName').disabled = false; $('spotName').value = '';
+      $('prog').style.visibility = 'hidden'; $('prog').firstElementChild.style.width = '0';
+      if (!spot) { $('recBtn').disabled = false; $('recStatus').textContent = 'Not enough signal data. Are you connected to Wi‑Fi?'; return; }
+      spots = await loadSpots(); spots.push(spot); saveSpots(spots);
+      pending = null; $('recBtn').disabled = true;
+      $('recStatus').textContent = `Saved “${name}” (${fmt(spot.rssi, 1)} dBm). Walk to the next spot and click the map.`;
+      render(); renderSpots();
+    },
+  });
+};
+
+function renderSpots() {
+  const tb = $('spots').querySelector('tbody'); tb.innerHTML = '';
+  $('spots').hidden = !spots.length; $('noSpots').hidden = !!spots.length;
+  spots.forEach((s, i) => {
+    const q = quality(s.rssi), tr = document.createElement('tr');
+    tr.innerHTML = `<td>${esc(s.name)}</td><td style="color:${q.color}">${fmt(s.rssi, 1)} dBm</td><td>${s.score}</td>
+      <td class="hide-sm">${s.ping == null ? '--' : fmt(s.ping, 1) + ' ms'}</td>
+      <td>${s.x != null ? '✓' : ''} <button class="place small" style="padding:3px 8px">${s.x != null ? 'Move' : 'Place'}</button></td>
+      <td><button class="del" title="Remove">×</button></td>`;
+    tr.querySelector('.place').onclick = () => {
+      if (!settings.plan) { $('hint').innerHTML = '<b>Upload a floor plan or pick the blank grid first.</b>'; return; }
+      mode = { place: i }; render(); $('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    tr.querySelector('.del').onclick = () => { spots.splice(i, 1); saveSpots(spots); mode = 'spot'; render(); renderSpots(); };
+    tb.append(tr);
+  });
+}
+init();
+</script>
+</body>
+</html>
