@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wi‑Fi Spot Finder</title>
+<link rel="icon" href="">
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --ink: #14171c; --muted: #6a717d; --line: #e3e6ea; --track: #e8eaee;
+    --excellent: #12a150; --good: #4cae3a; --fair: #d99a00; --weak: #e8681a; --bad: #d93636;
+    --accent: #2f6fed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1013; --card: #171a1f; --ink: #eef0f3; --muted: #8b93a0; --line: #262a31; --track: #23272e;
+      --excellent: #2fd07a; --good: #8bd352; --fair: #f2b62f; --weak: #ff8a3d; --bad: #ff5c5c;
+      --accent: #6b9bff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 34px; height: 34px; flex: none; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .dot.live { background: var(--excellent); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); padding: 8px 14px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; min-width: 0; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+
+  .gauge { position: relative; max-width: 320px; margin: 0 auto; }
+  .gauge svg { width: 100%; display: block; }
+  .gauge .track { stroke: var(--track); }
+  .gauge .val { transition: stroke-dasharray .45s ease, stroke .45s ease; }
+  .readout { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 22px; }
+  .big { font-size: 56px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .big small { font-size: 18px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .label { font-size: 16px; font-weight: 600; margin-top: 6px; }
+  .trend { text-align: center; margin-top: 4px; font-size: 22px; font-weight: 700; min-height: 32px; }
+  .trend.up { color: var(--excellent); } .trend.down { color: var(--bad); } .trend.flat { color: var(--muted); font-size: 16px; font-weight: 500; }
+  .peak { text-align: center; color: var(--muted); font-size: 13px; }
+
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .tile .k { color: var(--muted); font-size: 12px; }
+  .tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .h { color: var(--muted); font-size: 12px; }
+  .soundrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .soundrow span { color: var(--muted); font-size: 13px; }
+
+  canvas { width: 100%; display: block; }
+  #chart { height: 190px; } #pchart { height: 70px; margin-top: 8px; }
+  .full { grid-column: 1 / -1; }
+
+  .rec { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rec input { flex: 1 1 180px; min-width: 0; font: inherit; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  .progress { height: 6px; background: var(--track); border-radius: 3px; margin: 12px 0 4px; overflow: hidden; visibility: hidden; }
+  .progress div { height: 100%; width: 0; background: var(--accent); transition: width .4s linear; }
+  .rec-status { color: var(--muted); font-size: 13px; min-height: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .scorebar { display: flex; align-items: center; gap: 8px; }
+  .scorebar .bar { flex: 1; height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; min-width: 40px; }
+  .scorebar .bar div { height: 100%; }
+  .badge { font-size: 11px; font-weight: 700; color: #fff; background: var(--excellent); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
+  .del { border: 0; background: none; color: var(--muted); padding: 2px 6px; font-size: 18px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 14px 0 4px; }
+  .tablewrap { overflow-x: auto; }
+  .hide-sm { }
+  @media (max-width: 520px) { .hide-sm { display: none; } }
+  .tips { color: var(--muted); font-size: 13px; margin: 0; padding-left: 18px; }
+  .tips li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><svg class="logo" viewBox="100 100 824 824" aria-hidden="true">
+      <defs><linearGradient id="lg" x1="0.35" y1="0" x2="0.65" y2="1">
+        <stop offset="0" stop-color="#10bacc"/><stop offset=".5" stop-color="#2961f2"/><stop offset="1" stop-color="#33299e"/></linearGradient></defs>
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#lg)"/>
+      <g fill="none" stroke="#fff" stroke-width="62" stroke-linecap="round">
+        <path d="M395.3 477.3A165 165 0 0 1 628.7 477.3"/>
+        <path d="M324.6 406.6A265 265 0 0 1 699.4 406.6" stroke-opacity=".85"/>
+        <path d="M253.9 335.9A365 365 0 0 1 770.1 335.9" stroke-opacity=".65"/>
+      </g>
+      <path d="M512 774L441.7 627.8A78 78 0 1 1 582.3 627.8Z" fill="#fff"/>
+      <circle cx="512" cy="594" r="34" fill="#ff9e33"/>
+    </svg><h1>Wi‑Fi Spot Finder</h1></div>
+    <span class="pill"><span class="dot" id="dot"></span><span id="conn">Connecting…</span></span>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Signal strength</h2>
+      <div class="gauge">
+        <svg viewBox="0 0 200 152" aria-hidden="true">
+          <path class="track" d="M 30.72 140 A 80 80 0 1 1 169.28 140" fill="none" stroke-width="14" stroke-linecap="round" pathLength="100"/>
+          <path class="val" id="arc" d="M 30.72 140 A 80 80 0 1 1 169.28 140" fill="none" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
+        </svg>
+        <div class="readout">
+          <div class="big"><span id="rssi">--</span><small>dBm</small></div>
+          <div class="label" id="qlabel">&nbsp;</div>
+        </div>
+      </div>
+      <div class="trend flat" id="trend">Hold still…</div>
+      <div class="peak" id="peak">&nbsp;</div>
+    </section>
+
+    <section class="card">
+      <h2>Connection quality</h2>
+      <div class="tiles">
+        <div class="tile"><div class="k">Signal‑to‑noise</div><div class="v" id="snr">--</div><div class="h">25+ dB is good</div></div>
+        <div class="tile"><div class="k">Link rate</div><div class="v" id="tx">--</div><div class="h">Mac ↔ router speed</div></div>
+        <div class="tile"><div class="k">Router ping</div><div class="v" id="ping">--</div><div class="h" id="pingh">avg over 10 s</div></div>
+        <div class="tile"><div class="k">Jitter / loss</div><div class="v" id="jit">--</div><div class="h">lower is steadier</div></div>
+      </div>
+      <div class="soundrow">
+        <span>Walk without looking: beeps get faster &amp; higher as signal improves.</span>
+        <button id="sound">🔈 Sound off</button>
+      </div>
+    </section>
+
+    <section class="card full">
+      <h2>Last 60 seconds</h2>
+      <canvas id="chart"></canvas>
+      <canvas id="pchart"></canvas>
+    </section>
+
+    <section class="card full">
+      <h2>Compare spots</h2>
+      <div class="rec">
+        <input id="spotName" placeholder="Name this spot (e.g. Desk, Sofa, Bedroom)" maxlength="40">
+        <button class="primary" id="recBtn">Record 10 s</button>
+      </div>
+      <div class="progress" id="prog"><div></div></div>
+      <div class="rec-status" id="recStatus">Stand at a spot, hold the laptop still, then record. Best spot rises to the top.</div>
+      <div class="tablewrap">
+        <table id="spots" hidden>
+          <thead><tr><th>#</th><th>Spot</th><th style="width:28%">Score</th><th>Signal</th><th class="hide-sm">Ping</th><th class="hide-sm">Link</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="empty" id="noSpots">No spots recorded yet.</div>
+    </section>
+
+    <section class="card full">
+      <h2>How to use it</h2>
+      <ul class="tips">
+        <li>Readings update twice a second, but macOS refreshes signal about once a second, so pause 2–3 s at each place.</li>
+        <li>Hold the laptop the way you'd normally use it. Your body and the lid angle both change the reading.</li>
+        <li>Rough guide: −55 dBm or better is excellent, −65 good, −72 fair, below −80 unreliable.</li>
+        <li>Finding where to put a mesh node or extender? Pick the spot that scores “Good” and sits about halfway to where you need coverage.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script>
+document.querySelector('link[rel=icon]').href = 'data:image/svg+xml,' + encodeURIComponent(new XMLSerializer().serializeToString(document.querySelector('.logo')));
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const HIST = 120; // 60 s at 2 Hz
+const hist = [];
+let peak = null, recording = null, spots = [], soundOn = false, audio = null, latest = null;
+
+function quality(r) {
+  if (r == null || r === 0) return { name: 'No signal', color: css('--bad') };
+  if (r >= -55) return { name: 'Excellent', color: css('--excellent') };
+  if (r >= -65) return { name: 'Good', color: css('--good') };
+  if (r >= -72) return { name: 'Fair', color: css('--fair') };
+  if (r >= -80) return { name: 'Weak', color: css('--weak') };
+  return { name: 'Very weak', color: css('--bad') };
+}
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+const fmt = (v, d = 0) => v == null ? '--' : v.toFixed(d).replace('-', '−');
+
+function score(s) {
+  const sig = clamp((s.rssi + 90) / 40, 0, 1);              // −90 → 0, −50 → 1
+  const lat = s.ping == null ? 0 : clamp(1 - (s.ping - 2) / 48, 0, 1); // 2 ms → 1, 50 ms → 0
+  const stab = clamp(1 - (s.loss || 0) / 10, 0, 1) * clamp(1 - (s.jitter || 0) / 30, 0, 1);
+  return Math.round(100 * (0.7 * sig + 0.2 * lat + 0.1 * stab));
+}
+
+// ---------- live stream ----------
+const es = new EventSource('/events');
+es.onopen = () => $('dot').classList.add('live');
+es.onerror = () => { $('dot').classList.remove('live'); $('conn').textContent = 'Disconnected, is server.py running?'; };
+es.onmessage = e => onSample(JSON.parse(e.data));
+
+function onSample(d) {
+  latest = d;
+  const connected = d.on && d.rssi && d.rssi !== 0;
+  $('conn').textContent = connected
+    ? `${d.band} GHz · ch ${d.channel} · ${d.width} MHz · router ${d.gateway || '?'}`
+    : (d.on === false ? 'Wi‑Fi is off' : 'Not connected');
+
+  const r = connected ? d.rssi : null;
+  hist.push({ rssi: r, ping: d.ping });
+  if (hist.length > HIST) hist.shift();
+  if (r != null && (peak == null || r > peak)) peak = r;
+
+  const q = quality(r);
+  $('rssi').textContent = fmt(r);
+  $('qlabel').textContent = q.name;
+  $('qlabel').style.color = q.color;
+  const pct = r == null ? 0 : clamp((r + 92) / 52, 0.02, 1) * 100;
+  const arc = $('arc');
+  arc.setAttribute('stroke-dasharray', `${pct} 100`);
+  arc.setAttribute('stroke', q.color);
+  $('peak').textContent = peak != null ? `Best this session: ${fmt(peak)} dBm` : '';
+
+  // trend: last 2 s vs the 6 s before that
+  const rs = hist.map(h => h.rssi).filter(x => x != null);
+  const tr = $('trend');
+  if (rs.length >= 12) {
+    const diff = avg(rs.slice(-4)) - avg(rs.slice(-16, -4));
+    if (diff >= 2) { tr.className = 'trend up'; tr.textContent = '▲ Getting better'; }
+    else if (diff <= -2) { tr.className = 'trend down'; tr.textContent = '▼ Getting worse'; }
+    else { tr.className = 'trend flat'; tr.textContent = 'Steady'; }
+  }
+
+  const snr = connected && d.noise ? d.rssi - d.noise : null;
+  $('snr').textContent = snr == null ? '--' : `${snr} dB`;
+  $('snr').style.color = snr == null ? '' : snr >= 25 ? css('--excellent') : snr >= 15 ? css('--fair') : css('--bad');
+  $('tx').textContent = connected ? `${Math.round(d.tx)} Mbps` : '--';
+  $('ping').textContent = d.ping == null ? '--' : `${fmt(d.ping, 1)} ms`;
+  $('pingh').textContent = d.pingAvg == null ? 'avg over 10 s' : `avg ${fmt(d.pingAvg, 1)} ms over 10 s`;
+  $('jit').textContent = d.jitter == null ? '--' : `${fmt(d.jitter, 1)} ms / ${d.loss ?? 0}%`;
+
+  if (recording) recordTick(d, connected);
+  draw();
+}
+
+// ---------- charts ----------
+function setupCanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+function draw() {
+  // signal chart
+  { const { ctx, w, h } = setupCanvas($('chart'));
+    const lo = -95, hi = -40, pad = 34, y = v => h - 8 - (clamp(v, lo, hi) - lo) / (hi - lo) * (h - 16);
+    const x = i => pad + (i + HIST - hist.length) / (HIST - 1) * (w - pad - 4);
+    ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
+    [[-55, '--excellent'], [-65, '--good'], [-72, '--fair'], [-80, '--weak']].forEach(([v, c]) => {
+      ctx.strokeStyle = css('--line'); ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(pad, y(v)); ctx.lineTo(w, y(v)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = css(c); ctx.fillText(String(v).replace('-', '−'), 2, y(v));
+    });
+    ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+    for (let i = 1; i < hist.length; i++) {
+      const a = hist[i - 1].rssi, b = hist[i].rssi;
+      if (a == null || b == null) continue;
+      ctx.strokeStyle = quality(b).color;
+      ctx.beginPath(); ctx.moveTo(x(i - 1), y(a)); ctx.lineTo(x(i), y(b)); ctx.stroke();
+    }
+  }
+  // ping chart
+  { const { ctx, w, h } = setupCanvas($('pchart'));
+    const ps = hist.map(p => p.ping).filter(v => v != null);
+    const hi = Math.max(20, ...ps) * 1.1, pad = 34, y = v => h - 4 - v / hi * (h - 8);
+    const x = i => pad + (i + HIST - hist.length) / (HIST - 1) * (w - pad - 4);
+    ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle'; ctx.fillStyle = css('--muted');
+    ctx.fillText(`${Math.round(hi)} ms`, 2, 8); ctx.fillText('ping', 2, h - 10);
+    ctx.fillStyle = css('--accent');
+    hist.forEach((p, i) => {
+      if (p.ping == null) return;
+      const bh = Math.max(1.5, h - 4 - y(p.ping));
+      ctx.fillRect(x(i) - 1.5, h - 4 - bh, 3, bh);
+    });
+  }
+}
+window.addEventListener('resize', draw);
+
+// ---------- sound ("geiger counter") ----------
+$('sound').onclick = () => {
+  soundOn = !soundOn;
+  $('sound').textContent = soundOn ? '🔊 Sound on' : '🔈 Sound off';
+  if (soundOn) { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); beepLoop(); }
+};
+function beepLoop() {
+  if (!soundOn) return;
+  const r = latest && latest.rssi ? latest.rssi : -95;
+  const t = clamp((r + 90) / 45, 0, 1);  // −90 → 0, −45 → 1
+  const osc = audio.createOscillator(), g = audio.createGain(), now = audio.currentTime;
+  osc.frequency.value = 330 + t * 990; osc.type = 'sine';
+  g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.25, now + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+  osc.connect(g).connect(audio.destination); osc.start(now); osc.stop(now + 0.1);
+  setTimeout(beepLoop, 900 - t * 780);
+}
+
+// ---------- spot recording ----------
+const RECORD_MS = 10000;
+$('recBtn').onclick = () => {
+  const name = $('spotName').value.trim() || `Spot ${spots.length + 1}`;
+  recording = { name, start: Date.now(), samples: [] };
+  $('recBtn').disabled = true; $('spotName').disabled = true;
+  $('prog').style.visibility = 'visible'; $('prog').firstElementChild.style.width = '0';
+  $('recStatus').textContent = `Recording “${name}”… hold still.`;
+};
+function recordTick(d, connected) {
+  if (connected) recording.samples.push(d);
+  const p = (Date.now() - recording.start) / RECORD_MS;
+  $('prog').firstElementChild.style.width = `${clamp(p, 0, 1) * 100}%`;
+  if (p < 1) return;
+  const s = recording.samples, name = recording.name;
+  recording = null;
+  $('recBtn').disabled = false; $('spotName').disabled = false; $('spotName').value = '';
+  $('prog').style.visibility = 'hidden';
+  if (s.length < 4) { $('recStatus').textContent = 'Not enough signal data. Are you connected to Wi‑Fi?'; return; }
+  const pingsOk = s.map(x => x.ping).filter(v => v != null);
+  const spot = {
+    name, at: new Date().toISOString(),
+    rssi: Math.round(avg(s.map(x => x.rssi)) * 10) / 10,
+    min: Math.min(...s.map(x => x.rssi)), max: Math.max(...s.map(x => x.rssi)),
+    ping: pingsOk.length ? Math.round(avg(pingsOk) * 10) / 10 : null,
+    jitter: s[s.length - 1].jitter, loss: s[s.length - 1].loss,
+    tx: Math.round(avg(s.map(x => x.tx))),
+  };
+  spot.score = score(spot);
+  spots.push(spot); saveSpots(); renderSpots();
+  $('recStatus').textContent = `Saved “${name}”: ${fmt(spot.rssi, 1)} dBm, score ${spot.score}. Move to the next spot.`;
+}
+async function loadSpots() {
+  try { spots = await (await fetch('/api/spots')).json(); } catch { spots = []; }
+  renderSpots();
+}
+function saveSpots() {
+  fetch('/api/spots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spots) }).catch(() => {});
+}
+function renderSpots() {
+  const tb = $('spots').querySelector('tbody'); tb.innerHTML = '';
+  $('spots').hidden = !spots.length; $('noSpots').hidden = !!spots.length;
+  const sorted = spots.map((s, i) => ({ s, i })).sort((a, b) => b.s.score - a.s.score);
+  sorted.forEach(({ s, i }, rank) => {
+    const tr = document.createElement('tr'), q = quality(s.rssi);
+    const cell = (html, cls) => { const td = document.createElement('td'); if (cls) td.className = cls; if (html instanceof Node) td.append(html); else td.textContent = html; tr.append(td); return td; };
+    cell(rank + 1);
+    const nameTd = cell(s.name);
+    if (rank === 0 && spots.length > 1) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'BEST'; nameTd.append(b); }
+    const sb = document.createElement('div'); sb.className = 'scorebar';
+    sb.innerHTML = `<div class="bar"><div style="width:${s.score}%;background:${q.color}"></div></div><b>${s.score}</b>`;
+    cell(sb);
+    const sig = cell(`${fmt(s.rssi, 1)} dBm`); sig.style.color = q.color; sig.title = `range ${s.min} to ${s.max} dBm`;
+    cell(s.ping == null ? '--' : `${fmt(s.ping, 1)} ms`, 'hide-sm');
+    cell(`${s.tx} Mbps`, 'hide-sm');
+    const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.title = 'Remove';
+    del.onclick = () => { spots.splice(i, 1); saveSpots(); renderSpots(); };
+    cell(del);
+    tb.append(tr);
+  });
+}
+loadSpots();
+</script>
+</body>
+</html>

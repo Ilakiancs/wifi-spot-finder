@@ -1,0 +1,10 @@
+# build output
+build/
+wifisampler
+__pycache__/
+*.pyc
+
+# local data
+spots.json
+
+.DS_Store
