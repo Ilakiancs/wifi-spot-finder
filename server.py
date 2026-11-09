@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from tools import channels
+from tools.speedcheck import SpeedChecker
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(HERE, "web")
@@ -53,6 +54,15 @@ started_at = time.time()
 monitor = {"state": "starting", "since": time.time(), "event": None}
 children = []  # helper processes to stop on exit
 scan_lock = threading.Lock()
+heavy_lock = threading.Lock()  # lag tests and speed checks both saturate the line; never run them together
+
+
+def wifi_now():
+    with lock:
+        return dict(wifi)
+
+
+speed = SpeedChecker(DATA_DIR, wifi_now, heavy_lock)
 lag = {"running": False, "phase": "", "started": None, "result": None, "error": None}
 
 
@@ -330,7 +340,7 @@ def snapshot():
     d.update(gateway=gateway, ping=r["last"], pingAvg=r["avg"], jitter=r["jitter"], loss=r["loss"],
              inet=i["last"], inetAvg=i["avg"], inetJitter=i["jitter"], inetLoss=i["loss"],
              internetHost=INTERNET_HOST, state=monitor["state"], since=monitor["since"],
-             lagRunning=lag["running"])
+             lagRunning=lag["running"], speedRunning=speed.running)
     return d
 
 
@@ -421,6 +431,7 @@ def run_lagtest():
         lag["error"] = f"Couldn't run Apple's networkQuality tool ({e})."
     finally:
         lag.update(running=False, phase="done")
+        heavy_lock.release()
 
 
 def lag_state():
@@ -533,6 +544,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(lag_state())
         if path == "/api/scan":
             return self._json(read_json(SCAN_FILE, None))
+        if path == "/api/speed":
+            return self._json(speed.state(hours))
+        if path == "/api/export/speed.csv":
+            rows = [[fmt_ts(r["t"]), r["down"], r["up"], r.get("latency"), r.get("rssi"), r.get("tx"),
+                     "yes" if r.get("wifiLimited") else "", r.get("reason")] for r in speed.results(hours)]
+            body = csv_response(rows, ["time", "download_mbps", "upload_mbps", "idle_latency_ms", "wifi_signal_dbm",
+                                       "wifi_link_mbps", "limited_by_wifi", "trigger"])
+            return self._send(200, body, "text/csv", {"Content-Disposition": 'attachment; filename="speed-tests.csv"'})
         if path == "/api/export/outages.csv":
             rows = [[fmt_ts(e["start"]), fmt_ts(e["end"]), round(e["duration"]), KIND_LABEL.get(e["kind"], e["kind"]),
                      "yes" if e.get("ongoing") else ""] for e in load_events(since)]
@@ -573,10 +592,19 @@ class Handler(BaseHTTPRequestHandler):
                 write_json(SCAN_FILE, result)
                 return self._json(result)
             if path == "/api/lagtest":
-                if not lag["running"]:
-                    lag.update(running=True, phase="idle", started=time.time(), result=None, error=None)
-                    threading.Thread(target=run_lagtest, daemon=True).start()
+                if lag["running"] or not heavy_lock.acquire(blocking=False):
+                    return self._json({"ok": False, "busy": True})
+                lag.update(running=True, phase="idle", started=time.time(), result=None, error=None)
+                threading.Thread(target=run_lagtest, daemon=True).start()
                 return self._json({"ok": True})
+            if path == "/api/speed/run":
+                started = speed.start()
+                return self._json({"ok": started, "busy": not started})
+            if path == "/api/speed/settings":
+                data = json.loads(self._body(64 * 1024))
+                if not isinstance(data, dict):
+                    raise ValueError("wrong shape")
+                return self._json(speed.save_settings(data))
         except ValueError as e:
             return self._send(400, str(e).encode(), "text/plain")
         except (OSError, subprocess.SubprocessError) as e:
@@ -608,6 +636,7 @@ def main():
     threading.Thread(target=ping_loop, args=("router", find_gateway), daemon=True).start()
     threading.Thread(target=ping_loop, args=("internet", lambda: INTERNET_HOST), daemon=True).start()
     threading.Thread(target=monitor_loop, daemon=True).start()
+    threading.Thread(target=speed.scheduler_loop, daemon=True).start()
     print(f"Wi-Fi Spot Finder running at {url}  (Ctrl+C to stop)")
     if open_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()

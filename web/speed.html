@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speed Checks</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .head h2 { margin: 0; }
+  .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+  .form label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .form input, .form select { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  #chart { height: 240px; }
+  #periods { height: 150px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .flag { font-size: 11px; color: var(--weak); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header id="nav"></header>
+
+  <div class="grid">
+    <section class="card full">
+      <div class="head">
+        <h2>Speed checks</h2>
+        <div class="row"><span class="muted small" id="status"></span><button class="primary" id="run">Run a check now</button></div>
+      </div>
+      <p class="muted">Runs a short speed test now and then and compares it with what you pay for. Over a week or two you can see whether evenings are slower, or whether you're getting your plan's speed at all.</p>
+      <div class="form">
+        <label>Plan download (Mbps)<input id="planDown" type="number" min="1" step="any" placeholder="e.g. 100"></label>
+        <label>Plan upload (Mbps)<input id="planUp" type="number" min="1" step="any" placeholder="e.g. 20"></label>
+        <label>Automatic checks
+          <select id="interval">
+            <option value="0">Off</option>
+            <option value="360">Every 6 hours</option>
+            <option value="180">Every 3 hours</option>
+            <option value="60">Every hour</option>
+          </select>
+        </label>
+        <button id="save">Save</button>
+      </div>
+      <p class="muted small" id="usage" style="margin-top:10px"></p>
+    </section>
+
+    <section class="card full">
+      <div class="head">
+        <h2>Results</h2>
+        <div class="seg" id="range"><button data-h="168" class="on">7 days</button><button data-h="720">30 days</button></div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <canvas id="chart" style="margin-top:16px"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>Download</span>
+        <span><i style="background:var(--excellent)"></i>Upload</span>
+        <span><i style="border:2px solid var(--muted);background:transparent"></i>Limited by Wi-Fi (not counted)</span>
+        <span>Dashed lines: your plan</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Download by time of day</h2>
+      <canvas id="periods"></canvas>
+      <p class="muted small" style="margin-top:8px">Evenings are usually the slowest, since that's when everyone in the area is online. A big dip there points to an overloaded ISP rather than your Wi-Fi.</p>
+    </section>
+
+    <section class="card">
+      <h2>About Wi-Fi limits</h2>
+      <p class="small">A speed test over Wi-Fi can't go faster than the Wi-Fi link itself. When a result gets close to what your Wi-Fi link can carry, it's marked <span class="flag">limited by Wi-Fi</span> and left out of the averages, because it says more about your signal than your ISP.</p>
+      <p class="small muted">For results you'd send to your ISP, run a few checks near the router or on Ethernet.</p>
+    </section>
+
+    <section class="card full">
+      <div class="head">
+        <h2>All checks</h2>
+        <a class="btn" id="export" href="/api/export/speed.csv?hours=168">Export CSV</a>
+      </div>
+      <div class="tablewrap">
+        <table id="tests" hidden><thead><tr><th>When</th><th>Download</th><th>Upload</th><th class="hide-sm">Latency</th><th class="hide-sm">Wi-Fi</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="empty" id="noTests">No checks yet. Run one now, or turn on automatic checks.</div>
+    </section>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script src="speed.js"></script>
+</body>
+</html>

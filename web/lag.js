@@ -20,7 +20,8 @@ async function refresh() {
   if (!state.running && polling) { clearInterval(polling); polling = null; }
 }
 $('start').onclick = async () => {
-  await api('/api/lagtest', { method: 'POST' });
+  const r = await api('/api/lagtest', { method: 'POST' });
+  if (!r.ok) { $('status').textContent = 'A speed check is running right now. Try again in a few seconds.'; return; }
   state = null; refresh();
 };
 

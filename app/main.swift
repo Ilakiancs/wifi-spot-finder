@@ -13,7 +13,8 @@ let launchAgentLabel = "local.wifispotfinder"
 // tabs, in the same order as the page nav: (menu title, page, shortcut)
 let pages: [(String, String, String)] = [
     ("Live", "index.html", "1"), ("Heatmap", "heatmap.html", "2"), ("Channels", "channels.html", "3"),
-    ("Lag Test", "lag.html", "4"), ("History & Dropouts", "history.html", "5"),
+    ("Lag Test", "lag.html", "4"), ("Speed Checks", "speed.html", "5"),
+    ("History & Dropouts", "history.html", "6"),
 ]
 var launchAgentURL: URL {
     FileManager.default.homeDirectoryForCurrentUser

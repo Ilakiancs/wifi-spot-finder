@@ -19,7 +19,7 @@ const LOGO_SVG = `<svg class="logo" viewBox="100 100 824 824" aria-hidden="true"
   <circle cx="512" cy="594" r="34" fill="#ff9e33"/>
 </svg>`;
 
-const PAGES = [['index.html', 'Live'], ['heatmap.html', 'Heatmap'], ['channels.html', 'Channels'], ['lag.html', 'Lag test'], ['history.html', 'History']];
+const PAGES = [['index.html', 'Live'], ['heatmap.html', 'Heatmap'], ['channels.html', 'Channels'], ['lag.html', 'Lag test'], ['speed.html', 'Speed'], ['history.html', 'History']];
 
 function mountNav(active) {
   $('nav').innerHTML = `<a class="brand" href="index.html">${LOGO_SVG}<span>Wi‑Fi Spot Finder</span></a>
