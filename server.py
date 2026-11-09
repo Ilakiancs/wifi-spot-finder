@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 from tools import channels
 from tools.devices import DeviceTracker
+from tools.dnsbench import DnsBench
 from tools.speedcheck import SpeedChecker
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -65,6 +66,7 @@ def wifi_now():
 
 speed = SpeedChecker(DATA_DIR, wifi_now, heavy_lock)
 devices = DeviceTracker(DATA_DIR, lambda: gateway)
+dns = DnsBench(DATA_DIR, lambda: gateway)
 lag = {"running": False, "phase": "", "started": None, "result": None, "error": None}
 
 
@@ -550,6 +552,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(speed.state(hours))
         if path == "/api/devices":
             return self._json(devices.state())
+        if path == "/api/dns":
+            return self._json(dns.state())
         if path == "/api/export/speed.csv":
             rows = [[fmt_ts(r["t"]), r["down"], r["up"], r.get("latency"), r.get("rssi"), r.get("tx"),
                      "yes" if r.get("wifiLimited") else "", r.get("reason")] for r in speed.results(hours)]
@@ -601,6 +605,8 @@ class Handler(BaseHTTPRequestHandler):
                 lag.update(running=True, phase="idle", started=time.time(), result=None, error=None)
                 threading.Thread(target=run_lagtest, daemon=True).start()
                 return self._json({"ok": True})
+            if path == "/api/dns/run":
+                return self._json({"ok": dns.start()})
             if path == "/api/devices/scan":
                 devices.scan()
                 return self._json(devices.state())

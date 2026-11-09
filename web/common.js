@@ -19,7 +19,7 @@ const LOGO_SVG = `<svg class="logo" viewBox="100 100 824 824" aria-hidden="true"
   <circle cx="512" cy="594" r="34" fill="#ff9e33"/>
 </svg>`;
 
-const PAGES = [['index.html', 'Live'], ['heatmap.html', 'Heatmap'], ['channels.html', 'Channels'], ['lag.html', 'Lag test'], ['speed.html', 'Speed'], ['devices.html', 'Devices'], ['history.html', 'History']];
+const PAGES = [['index.html', 'Live'], ['heatmap.html', 'Heatmap'], ['channels.html', 'Channels'], ['lag.html', 'Lag test'], ['speed.html', 'Speed'], ['dns.html', 'DNS'], ['devices.html', 'Devices'], ['history.html', 'History']];
 
 function mountNav(active) {
   $('nav').innerHTML = `<a class="brand" href="index.html">${LOGO_SVG}<span>Wi‑Fi Spot Finder</span></a>
@@ -81,7 +81,7 @@ function startLive(onSample) {
     live.latest = d;
     const connected = d.on && d.rssi;
     if ($('conn')) {
-      let t = connected ? `${d.band} GHz · ch ${d.channel} · ${fmt(d.rssi)} dBm` : (d.on === false ? 'Wi‑Fi is off' : 'Not connected');
+      let t = connected ? `${fmt(d.rssi)} dBm · ch ${d.channel}` : (d.on === false ? 'Wi‑Fi is off' : 'Not connected');
       if (d.state && STATE_LABEL[d.state]) t = `⚠ ${STATE_LABEL[d.state]}`;
       $('conn').textContent = t;
     }

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNS Speed</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .head h2 { margin: 0; }
+  .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; min-width: 60px; }
+  .bar div { height: 100%; background: var(--accent); }
+  .tag { font-size: 11px; font-weight: 650; border-radius: 6px; padding: 1px 6px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .tag.you { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .tag.best { background: var(--excellent); color: #fff; border-color: transparent; }
+  .sub { color: var(--muted); font-size: 12px; }
+  tr.mine td { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header id="nav"></header>
+
+  <div class="grid">
+    <section class="card full">
+      <div class="head">
+        <h2>DNS speed test</h2>
+        <div class="row"><span class="muted small" id="status"></span><button class="primary" id="run">Run test</button></div>
+      </div>
+      <p class="muted">Every time you open a new website, your device first asks a DNS server where to find it. A slow DNS server adds a delay before anything starts loading. This test times your current DNS against your router and a few public ones. It takes about 20 seconds.</p>
+      <div id="verdict"></div>
+    </section>
+
+    <section class="card full" id="resultsCard" hidden>
+      <h2>Results</h2>
+      <div class="tablewrap">
+        <table id="results"><thead><tr><th>DNS server</th><th style="width:26%">Everyday lookups</th><th class="hide-sm">Fresh lookups</th><th class="hide-sm">Failed</th></tr></thead><tbody></tbody></table>
+      </div>
+      <p class="muted small" style="margin-top:10px"><b>Everyday lookups</b> are popular sites the server has probably cached, which is what most browsing feels like. <b>Fresh lookups</b> are names it can't have cached, so it has to go and find them.</p>
+    </section>
+
+    <section class="card full" id="howCard" hidden>
+      <h2>How to switch</h2>
+      <div class="grid">
+        <div>
+          <h3>Just this Mac</h3>
+          <p class="small">System Settings → Wi-Fi → <b>Details…</b> next to your network → DNS. Remove the old entries, add the new server's addresses, then press OK.</p>
+        </div>
+        <div>
+          <h3>Every device at home</h3>
+          <p class="small">In your router's settings (<span id="gw">192.168.1.1</span>), look under <b>DHCP</b> or <b>LAN</b> for the DNS servers it hands out. Change them there and every device picks them up the next time it reconnects.</p>
+        </div>
+      </div>
+      <p class="muted small" id="addresses" style="margin-top:8px"></p>
+    </section>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script src="dns.js"></script>
+</body>
+</html>

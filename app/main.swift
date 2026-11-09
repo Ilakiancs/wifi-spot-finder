@@ -15,7 +15,8 @@ let launchAgentLabel = "local.wifispotfinder"
 let pages: [(String, String, String)] = [
     ("Live", "index.html", "1"), ("Heatmap", "heatmap.html", "2"), ("Channels", "channels.html", "3"),
     ("Lag Test", "lag.html", "4"), ("Speed Checks", "speed.html", "5"),
-    ("Devices", "devices.html", "6"), ("History & Dropouts", "history.html", "7"),
+    ("DNS Speed", "dns.html", "6"),
+    ("Devices", "devices.html", "7"), ("History & Dropouts", "history.html", "8"),
 ]
 var launchAgentURL: URL {
     FileManager.default.homeDirectoryForCurrentUser
