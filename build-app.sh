@@ -19,6 +19,7 @@ cp "$BUILD/AppIcon.iconset/icon_256x256.png" assets/logo.png
 
 cp server.py "$APP/Contents/Resources/"
 cp -R web "$APP/Contents/Resources/web"
+rsync -a --exclude __pycache__ tools "$APP/Contents/Resources/"
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -33,6 +34,8 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSLocationUsageDescription</key><string>macOS only shows the names of nearby Wi-Fi networks to apps with Location access. Your location is never read or stored.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>macOS only shows the names of nearby Wi-Fi networks to apps with Location access. Your location is never read or stored.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 EOF

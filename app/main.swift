@@ -3,19 +3,26 @@
 // - lives in the menu bar with a live signal icon and today's summary
 // - shows the dashboard in its own window; closing the window keeps monitoring running
 import AppKit
+import CoreLocation
 import UniformTypeIdentifiers
 import WebKit
 
 let port = 8765
 let base = URL(string: "http://localhost:\(port)/")!
 let launchAgentLabel = "local.wifispotfinder"
+// tabs, in the same order as the page nav: (menu title, page, shortcut)
+let pages: [(String, String, String)] = [
+    ("Live", "index.html", "1"), ("Heatmap", "heatmap.html", "2"), ("Channels", "channels.html", "3"),
+    ("Lag Test", "lag.html", "4"), ("History & Dropouts", "history.html", "5"),
+]
 var launchAgentURL: URL {
     FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/LaunchAgents/\(launchAgentLabel).plist")
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate,
-                         WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+                         WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler,
+                         CLLocationManagerDelegate {
     var window: NSWindow?
     var web: WKWebView?
     var server: Process?
@@ -24,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var loginItem: NSMenuItem!
     var downloads: [ObjectIdentifier: URL] = [:]
     var serverReady = false
+    let location = CLLocationManager()
 
     // MARK: lifecycle
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -79,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         env["NO_BROWSER"] = "1"
         env["PORT"] = String(port)
         env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
+        env["PYTHONDONTWRITEBYTECODE"] = "1"  // don't write into the app bundle
         p.environment = env
         do { try p.run(); server = p } catch { showError() }
     }
@@ -100,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if window == nil {
             let cfg = WKWebViewConfiguration()
             cfg.mediaTypesRequiringUserActionForPlayback = []
+            cfg.userContentController.add(self, name: "native")
             let w = WKWebView(frame: .zero, configuration: cfg)
             w.setValue(false, forKey: "drawsBackground")
             w.navigationDelegate = self
@@ -130,10 +140,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
     }
 
-    @objc func openLive() { showPage("index.html") }
-    @objc func openHeatmap() { showPage("heatmap.html") }
-    @objc func openLag() { showPage("lag.html") }
-    @objc func openHistory() { showPage("history.html") }
+    @objc func openPageItem(_ sender: NSMenuItem) { showPage(sender.representedObject as! String) }
+
+    func pageItem(_ title: String, _ page: String, _ key: String) -> NSMenuItem {
+        let it = NSMenuItem(title: title, action: #selector(openPageItem(_:)), keyEquivalent: key)
+        it.representedObject = page
+        it.target = self
+        return it
+    }
+
+    // MARK: messages from the pages (window.webkit.messageHandlers.native)
+    func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.body as? String == "requestLocation" else { return }
+        // macOS only shows nearby network names to apps with Location permission
+        switch location.authorizationStatus {
+        case .notDetermined:
+            location.delegate = self
+            location.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")!)
+        default:
+            web?.evaluateJavaScript("typeof scan === 'function' && scan()")
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ m: CLLocationManager) {
+        if m.authorizationStatus == .authorizedAlways || m.authorizationStatus == .authorized {
+            web?.evaluateJavaScript("typeof scan === 'function' && scan()")
+        }
+    }
     @objc func reload() { web?.reload() }
     @objc func openDataFolder() {
         let dir = FileManager.default.homeDirectoryForCurrentUser
@@ -156,11 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             infoItems.append(it); m.addItem(it)
         }
         m.addItem(.separator())
-        for (title, sel, key) in [("Live Spot Finder", #selector(openLive), "1"), ("Heatmap", #selector(openHeatmap), "2"),
-                                  ("Lag Test", #selector(openLag), "3"), ("History & Dropouts", #selector(openHistory), "4")] {
-            let it = NSMenuItem(title: title, action: sel, keyEquivalent: key)
-            it.target = self; m.addItem(it)
-        }
+        for (title, page, key) in pages { m.addItem(pageItem(title, page, key)) }
         m.addItem(.separator())
         loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
         loginItem.target = self
@@ -357,11 +388,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         let viewItem = NSMenuItem(); main.addItem(viewItem)
         let view = NSMenu(title: "View")
-        for (title, sel, key) in [("Live", #selector(openLive), "1"), ("Heatmap", #selector(openHeatmap), "2"),
-                                  ("Lag Test", #selector(openLag), "3"), ("History", #selector(openHistory), "4"),
-                                  ("Reload", #selector(reload), "r")] {
-            view.addItem(withTitle: title, action: sel, keyEquivalent: key).target = self
-        }
+        for (title, page, key) in pages { view.addItem(pageItem(title, page, key)) }
+        view.addItem(.separator())
+        view.addItem(withTitle: "Reload", action: #selector(reload), keyEquivalent: "r").target = self
         viewItem.submenu = view
 
         let winItem = NSMenuItem(); main.addItem(winItem)

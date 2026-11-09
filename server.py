@@ -23,6 +23,8 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from tools import channels
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(HERE, "web")
 SAMPLER_SRC = os.path.join(HERE, "wifisampler.swift")
@@ -38,6 +40,7 @@ EVENTS_FILE = os.path.join(DATA_DIR, "events.jsonl")
 FLOORPLAN_FILE = os.path.join(DATA_DIR, "floorplan.bin")
 FLOORPLAN_TYPE = os.path.join(DATA_DIR, "floorplan.type")
 LOG_DIR = os.path.join(DATA_DIR, "logs")
+SCAN_FILE = os.path.join(DATA_DIR, "lastscan.json")
 LOG_EVERY = 10          # seconds between history samples
 KEEP_DAYS = 30          # history retention
 MIN_EVENT_SECS = 3      # ignore blips shorter than this
@@ -49,6 +52,7 @@ gateway = None
 started_at = time.time()
 monitor = {"state": "starting", "since": time.time(), "event": None}
 children = []  # helper processes to stop on exit
+scan_lock = threading.Lock()
 lag = {"running": False, "phase": "", "started": None, "result": None, "error": None}
 
 
@@ -527,6 +531,8 @@ class Handler(BaseHTTPRequestHandler):
                                "samples": downsample(samples), "events": events})
         if path == "/api/lagtest":
             return self._json(lag_state())
+        if path == "/api/scan":
+            return self._json(read_json(SCAN_FILE, None))
         if path == "/api/export/outages.csv":
             rows = [[fmt_ts(e["start"]), fmt_ts(e["end"]), round(e["duration"]), KIND_LABEL.get(e["kind"], e["kind"]),
                      "yes" if e.get("ongoing") else ""] for e in load_events(since)]
@@ -561,6 +567,11 @@ class Handler(BaseHTTPRequestHandler):
                 with open(FLOORPLAN_TYPE, "w") as f:
                     f.write(ctype)
                 return self._json({"ok": True})
+            if path == "/api/scan":
+                with scan_lock:
+                    result = channels.scan(SAMPLER)
+                write_json(SCAN_FILE, result)
+                return self._json(result)
             if path == "/api/lagtest":
                 if not lag["running"]:
                     lag.update(running=True, phase="idle", started=time.time(), result=None, error=None)
@@ -568,6 +579,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
         except ValueError as e:
             return self._send(400, str(e).encode(), "text/plain")
+        except (OSError, subprocess.SubprocessError) as e:
+            return self._send(500, str(e).encode(), "text/plain")
         self._send(404, b"not found", "text/plain")
 
     def do_DELETE(self):

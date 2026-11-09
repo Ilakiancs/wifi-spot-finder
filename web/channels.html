@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Channel Scanner</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .spectrum { height: 200px; }
+  .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; min-width: 60px; }
+  .bar div { height: 100%; }
+  .tag { font-size: 11px; font-weight: 650; border-radius: 6px; padding: 1px 6px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .tag.you { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .tag.best { background: var(--excellent); color: #fff; border-color: transparent; }
+  tr.mine td { font-weight: 600; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .head h2 { margin: 0; }
+  .summary { font-size: 17px; margin: 4px 0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header id="nav"></header>
+
+  <div class="grid">
+    <section class="card full">
+      <div class="head">
+        <h2>Channel scanner</h2>
+        <div class="row"><span class="muted small" id="status"></span><button class="primary" id="scan">Scan</button></div>
+      </div>
+      <div id="summary"><p class="muted">Scans the Wi-Fi networks around you and checks how crowded your router's channel is. Neighbours on the same channel take turns with you, which slows everyone down. Moving to a quieter channel is free and often helps.</p></div>
+    </section>
+
+    <section class="card full" id="spectrumCard" hidden>
+      <h2>What's on the air</h2>
+      <div id="spectra"></div>
+      <p class="muted small" style="margin-top:8px">Each hump is a network: its width is the slice of spectrum it uses, and its height is how strong it is here. Yours is drawn in blue.</p>
+    </section>
+
+    <section class="card" id="chanCard" hidden>
+      <h2>Channels for your band</h2>
+      <div class="tablewrap"><table id="chans"><thead><tr><th>Channel</th><th style="width:45%">Crowding</th><th>Networks</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="card" id="howCard" hidden>
+      <h2>How to change it</h2>
+      <div id="how"></div>
+    </section>
+
+    <section class="card full" id="netCard" hidden>
+      <div class="head">
+        <h2>Networks nearby</h2>
+        <button id="names" hidden>Show network names</button>
+      </div>
+      <div class="tablewrap"><table id="nets"><thead><tr><th>Network</th><th>Band</th><th>Channel</th><th class="hide-sm">Width</th><th>Signal</th></tr></thead><tbody></tbody></table></div>
+      <p class="muted small" id="namesNote" style="margin-top:10px"></p>
+    </section>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script src="channels.js"></script>
+</body>
+</html>
